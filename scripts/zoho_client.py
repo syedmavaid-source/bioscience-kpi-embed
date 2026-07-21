@@ -39,8 +39,7 @@ def _get(url, token):
         return json.loads(resp.read().decode())
 
 
-def export_view(view_id, token):
-    """Export a view's data, sync first, falling back to async bulk export."""
+def _export_view_once(view_id, token):
     base = "https://analyticsapi.zoho.com/restapi/v2"
     params = urllib.parse.urlencode({"CONFIG": json.dumps({"responseFormat": "json"})})
     try:
@@ -51,7 +50,7 @@ def export_view(view_id, token):
     start = _get(f"{base}/bulk/workspaces/{WORKSPACE_ID}/views/{view_id}/data?{params}", token)
     job_id = start["data"]["jobId"]
     download_url = None
-    for _ in range(60):
+    for _ in range(150):  # up to 150s — GitHub Actions' network to Zoho is sometimes slower than local
         status = _get(f"{base}/bulk/workspaces/{WORKSPACE_ID}/exportjobs/{job_id}", token)
         code = status["data"]["jobStatus"]
         if code == "JOB COMPLETED":
@@ -65,3 +64,18 @@ def export_view(view_id, token):
     result = _get(download_url, token)
     data = result.get("data")
     return data.get("rows") if isinstance(data, dict) else data
+
+
+def export_view(view_id, token, retries=2):
+    """Export a view's data, sync first, falling back to async bulk export. Retries the whole
+    attempt on transient failures (timeouts, network hiccups) before giving up."""
+    last_err = None
+    for attempt in range(retries + 1):
+        try:
+            return _export_view_once(view_id, token)
+        except Exception as e:
+            last_err = e
+            if attempt < retries:
+                print(f"export_view({view_id}) attempt {attempt + 1} failed ({e}), retrying...")
+                time.sleep(5)
+    raise last_err

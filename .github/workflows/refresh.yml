@@ -27,7 +27,7 @@ jobs:
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
         run: |
           for s in render_email render_social render_website render_academy render_portal; do
-            python3 scripts/$s.py
+            python3 scripts/$s.py || echo "::warning::$s failed this run, keeping other channels"
             sleep 3
           done
           python3 scripts/render_index.py
