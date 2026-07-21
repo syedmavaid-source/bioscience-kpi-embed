@@ -23,13 +23,18 @@ jobs:
       - name: Install dependencies
         run: pip install anthropic
 
-      - name: Render Email channel page
+      - name: Render channel pages
         env:
           ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
           ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
           ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: python3 scripts/render_email.py
+        run: |
+          for s in render_email render_social render_website render_academy render_portal; do
+            python3 scripts/$s.py
+            sleep 3
+          done
+          python3 scripts/render_index.py
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

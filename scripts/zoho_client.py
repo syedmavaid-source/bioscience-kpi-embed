@@ -51,7 +51,7 @@ def export_view(view_id, token):
     start = _get(f"{base}/bulk/workspaces/{WORKSPACE_ID}/views/{view_id}/data?{params}", token)
     job_id = start["data"]["jobId"]
     download_url = None
-    for _ in range(30):
+    for _ in range(60):
         status = _get(f"{base}/bulk/workspaces/{WORKSPACE_ID}/exportjobs/{job_id}", token)
         code = status["data"]["jobStatus"]
         if code == "JOB COMPLETED":
