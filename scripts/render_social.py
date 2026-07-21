@@ -48,8 +48,9 @@ def main():
             + "\n".join(cards) + "\n  </div>\n\n"
         )
 
+    brands_this_month = sorted(set(r["Brand"] for r in latest_rows))
     extra_sentence = (
-        " Engagement is blended across Genefill and HYAcorp on a per-reach basis, since no BioScience Instagram is connected yet."
+        f" Engagement is blended across {', '.join(brands_this_month)} on a per-reach basis."
     )
     latest["conclusion"] = build_smart_conclusion(latest["narrative_kpis"], extra_sentence)
 
