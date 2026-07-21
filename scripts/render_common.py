@@ -57,7 +57,7 @@ def kpi_row(k, display_name, month_precision=1, unit_suffix=" %", target_suffix=
       <td>{weight}</td>
       <td><span class="pill {status_cls}">{status_txt}</span></td>
     </tr>"""
-    return row_html, weight, achievement
+    return row_html, weight, achievement, bench_val
 
 
 def context_row(label, value):
@@ -77,59 +77,85 @@ def brand_card(brand_name, lines):
     return f"""    <div class="card"><div class="lab">{brand_name}</div><div class="con" style="margin-top:4px;">{body}</div></div>"""
 
 
-def build_narrative_system_prompt():
-    return """You write the "conclusion" card for a live marketing-analytics dashboard tile. \
-House style, matching prior editions exactly:
-- 2-3 sentences, one paragraph, no line breaks.
-- Lead with the single biggest problem or the single most important contrast in the numbers, using the actual figures (not vague words like "low" or "good" without a number attached).
-- Wrap the one most important phrase in <b>...</b> — exactly one bolded phrase, chosen for what a reader should not miss.
-- Use &mdash; (HTML entity, not a raw em dash character) for any dash.
-- Plain, direct, slightly analytical tone. No emoji, no exclamation points, no hedging ("it seems", "perhaps").
-- Do not restate the health score or status label — the card next to yours already shows those.
-- Output ONLY the paragraph HTML fragment. No preamble, no markdown, no quotes around it."""
+def _kpi_lost_points(k):
+    """Points lost out of this KPI's own weight, i.e. weight * (1 - achievement/100), capped at 0.
+    This is the exact quantity the calc box's Sigma(weight*achievement) is short by — ranking on
+    this (rather than raw achievement %) surfaces whichever KPI is actually dragging the score down
+    the most, not just whichever happens to have the lowest percentage."""
+    return k["weight"] * max(0, 100 - min(k["achievement_pct"], 100)) / 100
 
 
-def generate_conclusion(payload, fallback, model="claude-opus-4-8"):
-    try:
-        import anthropic
-    except ImportError:
-        return fallback
-    try:
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model=model,
-            max_tokens=300,
-            thinking={"type": "adaptive"},
-            output_config={"effort": "low"},
-            system=build_narrative_system_prompt(),
-            messages=[{"role": "user", "content": json.dumps(payload, indent=2)}],
-        )
-        if response.stop_reason == "refusal":
-            return fallback
-        text = next((b.text for b in response.content if b.type == "text"), "").strip()
-        return text or fallback
-    except Exception as e:
-        print(f"LLM narrative generation failed, using fallback: {e}")
-        return fallback
+def _kpi_phrase(k):
+    unit = k.get("unit", "%")
+    actual_disp = f"{k['actual']:g}" if unit == "" else f"{k['actual']:.2f}" if k["direction"] == "lo" else f"{k['actual']:.1f}"
+    if k["direction"] == "lo":
+        return f"{k['name']} sits at {actual_disp}{unit} against a target under {k['target']:g}{unit}"
+    return f"{k['name']} is at {actual_disp}{unit} against a {k['target']:g}{unit} target"
 
 
-def build_dynamic_conclusion(kpis, extra_sentence=""):
-    """Zero-cost fallback narrative: leads with whichever scored KPI is furthest from target this month."""
-    ranked = sorted(kpis, key=lambda k: k["achievement_pct"])
+def _benchmark_clause(k):
+    """If a numeric benchmark exists, say whether the actual sits above or below it, and by how much."""
+    bench = k.get("benchmark_value")
+    if bench is None:
+        return ""
+    unit = k.get("unit", "%")
+    actual = k["actual"]
+    if k["direction"] == "lo":
+        gap = bench - actual
+        verb = "under" if gap > 0 else "over"
+    else:
+        gap = actual - bench
+        verb = "above" if gap > 0 else "below"
+    return f" &mdash; {abs(gap):.1f}{unit} {verb} the {bench:g}{unit} industry benchmark"
+
+
+def build_smart_conclusion(kpis, extra_sentence=""):
+    """Deterministic, no-LLM narrative. Ranks KPIs by weighted points lost (weight x gap-to-target),
+    the same quantity the calc box's math is driven by, so the KPI called out here is always the one
+    that would move the channel health score the most if fixed — not just whichever has the lowest
+    raw achievement percentage."""
+    ranked = sorted(kpis, key=_kpi_lost_points, reverse=True)
     worst, best = ranked[0], ranked[-1]
+    weight_total = sum(k["weight"] for k in kpis)
+    worst_lost = _kpi_lost_points(worst)
 
-    def phrase(k):
-        unit = k.get("unit", "%")
-        if k["direction"] == "lo":
-            return f"{k['name']} sits at {k['actual']:.2f}{unit} against a target under {k['target']:g}{unit}"
-        return f"{k['name']} is at {k['actual']:.1f}{unit} against a {k['target']:g}{unit} target"
-
-    lead = f"<b>{phrase(worst)}</b> &mdash; only {round(worst['achievement_pct'])}% of target reached, the clearest gap this month."
-    if best["name"] != worst["name"]:
-        contrast = f" {best['name']} is the strongest of the {len(kpis)}, at {round(best['achievement_pct'])}% of target."
+    lead = (
+        f"<b>{_kpi_phrase(worst)}</b>{_benchmark_clause(worst)} &mdash; the single biggest drag on the score: "
+        f"{worst['weight']} of {weight_total} weighted points at only {round(worst['achievement_pct'])}% of "
+        f"target costs {worst_lost:.1f} points this month."
+    )
+    if best["name"] != worst["name"] and best is not worst:
+        contrast = f" {best['name']} is comfortably ahead at {round(best['achievement_pct'])}% of target."
     else:
         contrast = ""
     return f"{lead}{contrast}{extra_sentence}"
+
+
+def build_overview_conclusion(channel_snapshots):
+    """Deterministic cross-channel synthesis for the index page — same weighted-drag logic, applied
+    to channel health scores instead of individual KPIs."""
+    scored = [s for s in channel_snapshots if s["status_cls"] != "x"]
+    if not scored:
+        return "No channels are scored yet this month."
+    ranked = sorted(scored, key=lambda s: float(s["health_disp"].replace("%", "").strip()))
+    worst, best = ranked[0], ranked[-1]
+    counts = {"g": 0, "a": 0, "r": 0}
+    for s in scored:
+        counts[s["status_cls"]] = counts.get(s["status_cls"], 0) + 1
+    status_bits = []
+    if counts.get("r"):
+        status_bits.append(f"{counts['r']} OFF TRACK")
+    if counts.get("a"):
+        status_bits.append(f"{counts['a']} BUILDING")
+    if counts.get("g"):
+        status_bits.append(f"{counts['g']} ON TRACK")
+    lead = f"<b>{worst['name']} is the weakest link this month at {worst['health_disp']}</b> ({worst['status_txt']})."
+    if best["name"] != worst["name"]:
+        contrast = f" {best['name']} leads at {best['health_disp']} ({best['status_txt']})."
+    else:
+        contrast = ""
+    tail = f" Of {len(scored)} scored channels: {', '.join(status_bits)}."
+    return f"{lead}{contrast}{tail}"
 
 
 STYLE_BLOCK = """<style>

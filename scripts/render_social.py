@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from zoho_client import access_token, export_view
 from render_common import (
     MONTH_NAMES, num, status_for, kpi_row, brand_card,
-    generate_conclusion, build_dynamic_conclusion, render_page, write_page, write_snapshot,
+    build_smart_conclusion, render_page, write_page, write_snapshot,
 )
 
 EVAL_VIEW_ID = "2605787000015513063"    # Social KPI Evaluation - Latest Month
@@ -54,7 +54,7 @@ def main():
 
     for kpi_name in ORDER:
         k = evals_by_kpi[kpi_name]
-        row_html, weight, achievement = kpi_row(k, KPI_SHORT_NAME[kpi_name])
+        row_html, weight, achievement, bench_val = kpi_row(k, KPI_SHORT_NAME[kpi_name])
         rows_html.append(row_html)
         weighted_sum += weight * achievement
         weight_total += weight
@@ -64,7 +64,7 @@ def main():
             "name": KPI_SHORT_NAME[kpi_name],
             "actual": round(num(k["Actual Value"]), 2),
             "target": num(k["Target"]),
-            "benchmark": k["Benchmark"],
+            "benchmark_value": bench_val,
             "achievement_pct": round(achievement, 1),
             "weight": weight,
             "direction": k["Direction"],
@@ -77,18 +77,7 @@ def main():
     extra_sentence = (
         " Engagement is blended across Genefill and HYAcorp on a per-reach basis, since no BioScience Instagram is connected yet."
     )
-    fallback_conclusion = build_dynamic_conclusion(narrative_kpis, extra_sentence)
-    payload = {
-        "month": month_label,
-        "channel_health": health_disp,
-        "status": status_txt,
-        "scored_kpis": narrative_kpis,
-        "by_brand": [
-            {"brand": r["Brand"], "engagement_rate_pct": num(r["Engagement Rate %"]), "save_rate_pct": num(r["Save Rate %"])}
-            for r in latest_rows
-        ],
-    }
-    conclusion = generate_conclusion(payload, fallback_conclusion)
+    conclusion = build_smart_conclusion(narrative_kpis, extra_sentence)
 
     html = render_page(
         title="Social Channel",

@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 
-from render_common import STYLE_BLOCK, write_page
+from render_common import STYLE_BLOCK, write_page, build_overview_conclusion
 
 CHANNEL_ORDER = ["email", "social", "website", "academy", "portal"]
 
@@ -44,6 +44,7 @@ def main():
 
     generated_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
     month_label = next(iter(snapshots.values()))["month_label"] if snapshots else ""
+    overview_conclusion = build_overview_conclusion(list(snapshots.values()))
 
     html = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -70,8 +71,8 @@ def main():
       <span class="pill {overall_cls}">{overall_status}</span>
     </div>
     <div class="card">
-      <div class="lab">About this dashboard</div>
-      <div class="con" style="margin-top:6px;">Live from Zoho Analytics, computed the same way each channel's own page shows &mdash; Channel Health = &Sigma;(weight &times; achievement) &divide; &Sigma;(weight), scored only once weight coverage reaches 50 of 100. Click any tile below for the full KPI breakdown.</div>
+      <div class="lab">The conclusion</div>
+      <div class="con" style="margin-top:6px;">{overview_conclusion}</div>
     </div>
   </div>
 
@@ -80,7 +81,7 @@ def main():
 {chr(10).join(tiles)}
   </div>
 
-  <div class="foot">Regenerated {generated_at}.</div>
+  <div class="foot">Live from Zoho Analytics, computed the same way each channel's own page shows &mdash; Channel Health = &Sigma;(weight &times; achievement) &divide; &Sigma;(weight), scored only once weight coverage reaches 50 of 100. Regenerated {generated_at}.</div>
 </div>
 </body></html>
 """
