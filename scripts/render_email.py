@@ -8,16 +8,17 @@ from render_common import (
     js_payload, render_sparkline, render_page, write_page, write_snapshot,
 )
 
-ALL_MONTHS_VIEW_ID = "2605787000015559016"    # Email KPI Evaluation - All Months
-MONTHLY_VIEW_ID = "2605787000015551034"       # Email KPIs Monthly (Corrected)
+ALL_MONTHS_VIEW_ID = "2605787000015565060"    # Email KPI Evaluation - All Months v2 (adds Unsubscribe Rate)
+MONTHLY_VIEW_ID = "2605787000015560014"       # Email KPIs Monthly (Corrected v2)
 
 KPI_SPECS = {
     "CTR %": {"display_name": "Click-Through Rate"},
     "CTOR %": {"display_name": "Click-to-Open Rate"},
     "Open Rate %": {"display_name": "Open Rate"},
     "Bounce Rate %": {"display_name": "Hard Bounce Rate"},
+    "Unsubscribe Rate %": {"display_name": "Unsubscribe Rate"},
 }
-ORDER = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %"]
+ORDER = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %", "Unsubscribe Rate %"]
 
 
 def main():
@@ -85,12 +86,15 @@ def main():
             "Distributor-segment rates are pulled live from the same MailerLite sync but carry no target, so they're "
             "shown for contrast (current month only, not shown for past months) and not counted. Open Rate uses "
             "total opens (incl. repeat opens), matching its own benchmark's stated &quot;raw&quot; basis &mdash; "
-            "CTR, CTOR and Bounce Rate use unique counts as before."
+            "CTR, CTOR, Bounce Rate and Unsubscribe Rate use unique counts as before. Unsubscribe Rate joins the "
+            "&quot;Unsubscribes (Zoho Campaigns)&quot; event log to Emails Sent per campaign &mdash; added "
+            "2026-07-21, bringing weight coverage to a full 100 of 100."
         ),
         foot_note=(
-            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; All Months" (Corrected) joined against '
-            '"KPI Targets". Corrected 2026-07-21: fixed Brand mislabeling and aligned Open Rate to raw opens to '
-            "match its own benchmark definition. Achievement = min(current &divide; target, 1) &times; 100, or "
+            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; All Months v2" joined against '
+            '"KPI Targets". Corrected 2026-07-21: fixed Brand mislabeling, aligned Open Rate to raw opens to '
+            "match its own benchmark definition, and added Unsubscribe Rate as a 5th scored KPI. "
+            "Achievement = min(current &divide; target, 1) &times; 100, or "
             "min(target &divide; current, 1) &times; 100 where lower is better."
         ),
     )
