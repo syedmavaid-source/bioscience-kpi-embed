@@ -116,6 +116,27 @@ def generate_conclusion(month_label, kpi_rows, dist_open, dist_ctr, dist_ctor, h
         return fallback
 
 
+def build_dynamic_conclusion(kpis, dist_ctr, dist_ctor):
+    """Zero-cost fallback narrative: leads with whichever scored KPI is furthest from target this month."""
+    ranked = sorted(kpis, key=lambda k: k["achievement_pct"])
+    worst, best = ranked[0], ranked[-1]
+
+    def phrase(k):
+        if k["direction"] == "lo":
+            return f"{k['name']} sits at {k['actual']:.2f}% against a target under {k['target']:g}%"
+        return f"{k['name']} is at {k['actual']:.1f}% against a {k['target']:g}% target"
+
+    lead = f"<b>{phrase(worst)}</b> &mdash; only {round(worst['achievement_pct'])}% of target reached, the clearest gap this month."
+    if best["name"] != worst["name"]:
+        contrast = f" {best['name']} is the strongest of the four, at {round(best['achievement_pct'])}% of target."
+    else:
+        contrast = ""
+    return (
+        f"{lead}{contrast} Distributors, on the identical infrastructure, click through at {dist_ctr:.1f}% "
+        f"and open-to-click at {dist_ctor:.1f}%: the system works, the doctor content is what's underperforming."
+    )
+
+
 def context_row(label, value):
     return f"""    <tr class="excl">
       <td>{label}</td>
@@ -154,8 +175,6 @@ def main():
     narrative_kpis = []
     order = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %"]
     evals_by_kpi = {r["KPI"]: r for r in evals}
-    ctr_actual = num(evals_by_kpi["CTR %"]["Actual Value"])
-    ctr_bench = num(evals_by_kpi["CTR %"]["Benchmark Value"])
 
     for kpi_name in order:
         k = evals_by_kpi[kpi_name]
@@ -172,6 +191,7 @@ def main():
             "benchmark": k["Benchmark"],
             "achievement_pct": round(achievement, 1),
             "weight": weight,
+            "direction": k["Direction"],
         })
 
     rows_html.append(context_row("Open Rate (Distributors)", dist_open))
@@ -184,12 +204,7 @@ def main():
     health_disp = f"{round(health):.0f} %" if health is not None else "Not scored"
 
     month_label = f"{MONTH_NAMES[latest_month]} {latest_year}"
-    fallback_conclusion = (
-        f"Deliverability is fine &mdash; hard bounces sit above the ceiling but aren't catastrophic &mdash; "
-        f"while doctor <b>clicks have all but disappeared</b> (CTR {ctr_actual:.1f}% vs a {ctr_bench:.2f}% benchmark). "
-        f"Distributors, on the identical infrastructure, click through at {dist_ctr:.1f}% and open-to-click at {dist_ctor:.1f}%: "
-        f"the system works, the doctor content isn't landing."
-    )
+    fallback_conclusion = build_dynamic_conclusion(narrative_kpis, dist_ctr, dist_ctor)
     conclusion = generate_conclusion(
         month_label, narrative_kpis, dist_open, dist_ctr, dist_ctor, health_disp, status_txt, fallback_conclusion
     )
