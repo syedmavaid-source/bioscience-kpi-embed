@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 
-from render_common import STYLE_BLOCK, write_page, build_overview_conclusion
+from render_common import STYLE_BLOCK, LOGO_HTML, write_page, build_overview_conclusion
 
 CHANNEL_ORDER = ["email", "social", "website", "academy", "portal"]
 
@@ -52,22 +52,23 @@ def main():
 {STYLE_BLOCK}
 <style>
 .tilegrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}}
-.tile{{background:var(--card);border-radius:10px;padding:14px;box-shadow:0 1px 3px rgba(18,53,79,.09);
+.tile{{background:var(--card);border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,54,61,.09);
   border-left:4px solid var(--grey);text-decoration:none;display:block;transition:transform .1s,box-shadow .1s;}}
-.tile:hover{{transform:translateY(-2px);box-shadow:0 5px 14px rgba(18,53,79,.16);}}
+.tile:hover{{transform:translateY(-2px);box-shadow:0 5px 14px rgba(0,54,61,.16);}}
 .tile .name{{font-size:13px;font-weight:700;color:var(--navy);}}
-.tile .score{{font-size:28px;font-weight:800;color:var(--navy);margin:4px 0;font-variant-numeric:tabular-nums;}}
+.tile .score{{font-size:28px;font-weight:900;color:var(--navy);margin:4px 0;font-variant-numeric:tabular-nums;}}
 .tile .drill{{font-size:10px;color:var(--blue);font-weight:700;margin-top:8px;}}
 </style>
 </head><body>
 
 <div class="wrap">
-  <h2 class="sec">BioScience &middot; Digital KPI Dashboard<span class="sub">{month_label} &mdash; <span class="livechip"><span class="livedot"></span>Live, refreshed every 20 min</span></span></h2>
+  {LOGO_HTML}
+  <h2 class="sec">Digital KPI Dashboard<span class="sub">{month_label} &mdash; <span class="livechip"><span class="livedot"></span>Live, refreshed every 20 min</span></span></h2>
 
   <div class="grid g2" style="margin-top:16px;">
-    <div class="card" style="background:var(--navy);color:#fff;border-left:5px solid {overall_color};">
-      <div class="lab" style="color:#8fd8f0;">Overall digital health</div>
-      <div class="val" style="color:#fff;">{overall_disp}</div>
+    <div class="card" style="background:var(--calc-bg);color:var(--calc-fg);border-left:5px solid {overall_color};">
+      <div class="lab" style="color:var(--calc-accent);">Overall digital health</div>
+      <div class="val" style="color:var(--calc-fg);">{overall_disp}</div>
       <span class="pill {overall_cls}">{overall_status}</span>
     </div>
     <div class="card">

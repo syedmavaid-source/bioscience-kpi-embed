@@ -289,51 +289,60 @@ def build_overview_conclusion(channel_snapshots):
 
 STYLE_BLOCK = """<style>
 :root{
-  --blue:#1C8CBE; --navy:#12354F; --deep:#0d2740; --teal:#2FA9BE; --gold:#B8862F;
-  --ink:#1f2b30; --mute:#6b7c85; --green:#2f9e5f; --amber:#E08A1E; --red:#D64531;
-  --grey:#9aa6ad; --line:#dde7e9; --card:#ffffff; --bg:#eef3f4;
-  --calc-bg:#12354F; --calc-fg:#ffffff; --calc-accent:#8fd8f0; --calc-res:#e7c589;
+  /* BioScience brand book (Oct '17), sec. 2.3.2: primary white/dark-green/turquoise,
+     secondary black/wine/blue/deep-teal/grays. --blue and --navy are legacy variable
+     names kept for compatibility with helper functions; values now map to brand hex. */
+  --blue:#00B0B9; --navy:#004851; --deep:#00363d; --teal:#007275; --gold:#A71757;
+  --ink:#293c40; --mute:#6c7f83; --green:#2f9e5f; --amber:#E08A1E; --red:#c94a3b;
+  --grey:#9ea8b0; --line:#dde3e4; --card:#ffffff; --bg:#f1f6f6;
+  --calc-bg:#00363d; --calc-fg:#f2f8f8; --calc-accent:#7fd8dc; --calc-res:#ffffff;
 }
 :root[data-theme="dark"]{
-  --ink:#e7edf0; --mute:#93a5ad; --card:#152634; --bg:#0b1720; --line:#233544;
-  --navy:#1a5a86; --navy-fg:#eaf6fb; --blue:#3ea8d6; --gold:#d6ac6a;
-  --calc-bg:#0a1c2a; --calc-fg:#dfe9ee; --calc-accent:#7fc9e6; --calc-res:#e7c589;
+  --ink:#e7edf0; --mute:#93a8ac; --card:#132326; --bg:#0a1718; --line:#22383b;
+  --navy:#4fc0c7; --navy-fg:#eaf6fb; --blue:#4fc0c7; --gold:#e0679a;
+  --calc-bg:#06181a; --calc-fg:#dfe9ee; --calc-accent:#7fd8dc; --calc-res:#ffffff;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --ink:#e7edf0; --mute:#93a5ad; --card:#152634; --bg:#0b1720; --line:#233544;
-    --navy:#1a5a86; --navy-fg:#eaf6fb; --blue:#3ea8d6; --gold:#d6ac6a;
-    --calc-bg:#0a1c2a; --calc-fg:#dfe9ee; --calc-accent:#7fc9e6; --calc-res:#e7c589;
+    --ink:#e7edf0; --mute:#93a8ac; --card:#132326; --bg:#0a1718; --line:#22383b;
+    --navy:#4fc0c7; --navy-fg:#eaf6fb; --blue:#4fc0c7; --gold:#e0679a;
+    --calc-bg:#06181a; --calc-fg:#dfe9ee; --calc-accent:#7fd8dc; --calc-res:#ffffff;
   }
 }
-*{box-sizing:border-box;margin:0;padding:0;font-family:'Helvetica Neue',Arial,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,'Helvetica Neue',sans-serif;}
 body{background:var(--bg);color:var(--ink);}
 .wrap{max-width:1120px;margin:0 auto;padding:22px 20px 40px;}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--line);}
+.logo{font-weight:900;font-size:19px;letter-spacing:-.3px;display:inline-flex;align-items:center;gap:9px;text-decoration:none;}
+.logo-bio{color:var(--blue);}
+.logo-div{width:3px;height:17px;background:var(--navy);display:inline-block;}
+.logo-sci{color:var(--navy);}
+.logo-tag{font-size:10px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:1.4px;}
 .crumb{font-size:12px;color:var(--mute);margin-bottom:2px;}
 .crumb b{color:var(--navy);font-weight:700;}
 .crumb a{color:var(--blue);text-decoration:none;font-weight:600;}
-h2.sec{font-size:20px;color:var(--navy);font-weight:800;margin:6px 0 2px;}
+h2.sec{font-size:20px;color:var(--navy);font-weight:900;margin:6px 0 2px;}
 h2.sec .sub{font-size:12.5px;color:var(--mute);font-weight:500;display:block;margin-top:3px;}
 .seclabel{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);font-weight:700;margin:20px 0 8px;}
 .grid{display:grid;gap:12px;}
 .g2{grid-template-columns:2fr 3fr;}
 .g3{grid-template-columns:repeat(3,1fr);}
-.card{background:var(--card);border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(18,53,79,.09);}
+.card{background:var(--card);border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,54,61,.09);}
 .card .lab{font-size:11px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
-.card .val{font-size:28px;font-weight:800;color:var(--navy);margin:4px 0 2px;font-variant-numeric:tabular-nums;}
+.card .val{font-size:28px;font-weight:900;color:var(--navy);margin:4px 0 2px;font-variant-numeric:tabular-nums;}
 .card .con{font-size:12px;color:var(--ink);line-height:1.5;}
-.pill{display:inline-block;font-size:9.5px;font-weight:700;border-radius:20px;padding:2px 10px;color:#fff;letter-spacing:.3px;}
+.pill{display:inline-block;font-size:9.5px;font-weight:700;border-radius:3px;padding:2px 10px;color:#fff;letter-spacing:.3px;}
 .g{background:var(--green);} .a{background:var(--amber);} .r{background:var(--red);} .x{background:var(--grey);}
 .tw{overflow-x:auto;}
 table{width:100%;border-collapse:separate;border-spacing:0 7px;min-width:720px;}
 th{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);text-align:left;padding:0 12px;font-weight:700;}
 td{background:var(--card);padding:11px 12px;font-size:12.5px;vertical-align:middle;}
-tr td:first-child{border-radius:8px 0 0 8px;font-weight:700;color:var(--navy);}
-tr td:last-child{border-radius:0 8px 8px 0;}
+tr td:first-child{border-radius:6px 0 0 6px;font-weight:700;color:var(--navy);}
+tr td:last-child{border-radius:0 6px 6px 0;}
 tr.excl td{background:color-mix(in srgb, var(--card) 88%, var(--mute));color:var(--mute);}
 tr.excl td:first-child{color:var(--mute);font-weight:600;}
-.bar{height:8px;background:var(--line);border-radius:5px;position:relative;width:150px;display:inline-block;vertical-align:middle;}
-.bar i{position:absolute;left:0;top:0;height:8px;border-radius:5px;}
+.bar{height:8px;background:var(--line);border-radius:2px;position:relative;width:150px;display:inline-block;vertical-align:middle;}
+.bar i{position:absolute;left:0;top:0;height:8px;border-radius:2px;}
 .bnk{position:absolute;top:-3px;width:2px;height:14px;background:var(--navy);}
 .small{font-size:10px;color:var(--mute);}
 .legend{display:flex;gap:20px;flex-wrap:wrap;font-size:10.5px;color:var(--mute);align-items:center;margin:11px 0 0;}
@@ -341,12 +350,19 @@ tr.excl td:first-child{color:var(--mute);font-weight:600;}
 .calc b{color:var(--calc-accent);}
 .calc .res{color:var(--calc-res);font-weight:700;}
 .calc .cov{color:var(--calc-accent);opacity:.85;font-size:10.5px;display:block;margin-top:6px;}
-.warnbox{margin-top:14px;background:color-mix(in srgb, var(--gold) 12%, var(--card));border-left:4px solid var(--gold);border-radius:0 8px 8px 0;padding:12px 15px;font-size:12px;line-height:1.55;}
+.warnbox{margin-top:14px;background:color-mix(in srgb, var(--gold) 10%, var(--card));border-left:3px solid var(--gold);border-radius:0 6px 6px 0;padding:12px 15px;font-size:12px;line-height:1.55;}
 .foot{font-size:10.5px;color:var(--mute);margin-top:24px;border-top:1px solid var(--line);padding-top:10px;line-height:1.6;}
-.livechip{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--green);letter-spacing:.3px;text-transform:uppercase;}
-.livedot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px color-mix(in srgb, var(--green) 25%, transparent);}
-.monthpick{font-size:11px;font-weight:600;color:var(--navy);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin-left:8px;}
+.livechip{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--blue);letter-spacing:.3px;text-transform:uppercase;}
+.livedot{width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px color-mix(in srgb, var(--blue) 25%, transparent);}
+.monthpick{font-size:11px;font-weight:600;color:var(--navy);background:var(--card);border:1px solid var(--line);border-radius:4px;padding:4px 8px;margin-left:8px;}
 </style>"""
+
+LOGO_HTML = (
+    '<div class="brandbar"><a href="index.html" class="logo">'
+    '<span class="logo-bio">Bio</span><span class="logo-div"></span>'
+    '<span class="logo-sci">SCIENCE</span></a>'
+    '<span class="logo-tag">Digital KPI Dashboard</span></div>'
+)
 
 
 def render_page(*, title, channel_name, month_label, health_disp, status_txt, status_cls,
@@ -396,6 +412,7 @@ function switchMonth(key) {{
 {STYLE_BLOCK}</head><body>
 
 <div class="wrap">
+  {LOGO_HTML}
   <div class="crumb"><a href="index.html">Overview</a> &rsaquo; <b>{channel_name}</b></div>
   <h2 class="sec">Level 2 &middot; {channel_name}<span class="sub">What exactly is off? &middot; <span class="livechip" id="liveLabel"><span class="livedot"></span>Live &mdash; {month_label} actuals</span>{picker_html}</span></h2>
 
