@@ -8,8 +8,8 @@ from render_common import (
     js_payload, render_sparkline, render_page, write_page, write_snapshot,
 )
 
-ALL_MONTHS_VIEW_ID = "2605787000015565012"  # Website KPI Evaluation - All Months
-MONTHLY_VIEW_ID = "2605787000015519023"     # Website SEO KPIs Monthly (raw, for by-brand cards)
+ALL_MONTHS_VIEW_ID = "2605787000015558068"  # Website KPI Evaluation - All Months v2 (CRM-based Lead Form Conversion)
+MONTHLY_VIEW_ID = "2605787000015556019"     # Website SEO + CRM Leads Monthly v2 (raw, for by-brand cards)
 
 KPI_SPECS = {
     "Lead Form Conversion %": {"display_name": "Lead-Form Conversion Rate"},
@@ -39,8 +39,9 @@ def main():
         cards = []
         for r in sorted(latest_rows, key=lambda r: r["Brand"]):
             lines = [
-                f"{r['ts.Total Sessions']} sessions &middot; {num(r['Organic Share %']):.1f}% organic",
-                f"{num(r['Lead Form Conversion %']):.2f}% conv &middot; {r['Form Submits']} form submits",
+                f"{r['Total Sessions']} sessions &middot; {num(r['Organic Share %']):.1f}% organic",
+                f"{num(r['Lead Form Conversion %']):.2f}% conv &middot; {r['CRM Leads']} CRM leads "
+                f"({r['GA4 Form Submits']} GA4 form-submit events)",
             ]
             cards.append(brand_card(r["Brand"], lines))
         brand_cards_html = (
@@ -48,7 +49,7 @@ def main():
             + "\n".join(cards) + "\n  </div>\n\n"
         )
 
-    total_sessions = sum(int(num(r["ts.Total Sessions"])) for r in latest_rows)
+    total_sessions = sum(int(num(r["Total Sessions"])) for r in latest_rows)
     extra_sentence = f" Combined sessions across all three brands this month: {total_sessions:,}."
     latest["conclusion"] = build_smart_conclusion(latest["narrative_kpis"], extra_sentence)
 
@@ -79,10 +80,17 @@ def main():
         data_note=(
             "Lead-Form Conversion and Organic Share are the only two KPIs currently instrumented against a live "
             "target &mdash; Engagement Rate (GA4) and Mobile Page Speed (LCP) from the original KPI framework "
-            "aren't wired into this workspace yet, so weight coverage sits at exactly 50 of 100."
+            "aren't wired into this workspace yet, so weight coverage sits at exactly 50 of 100. Lead-Form "
+            "Conversion is now based on genuine Zoho CRM lead records (added 2026-07-21) &mdash; counting Leads "
+            "whose source is each brand's own web form (Source_Agr = &quot;[Brand] Web&quot;), divided by GA4 "
+            "sessions &mdash; rather than the GA4 &quot;form_submit&quot; tracking event, which could over- or "
+            "under-count relative to leads actually captured in the CRM. GA4 form-submit events are still shown "
+            "alongside CRM leads on the by-brand cards for comparison."
         ),
         foot_note=(
-            'Live from Zoho Analytics &mdash; "Website KPI Evaluation &ndash; All Months" joined against "KPI Targets".'
+            'Live from Zoho Analytics &mdash; "Website KPI Evaluation &ndash; All Months v2" joined against '
+            '"KPI Targets". Corrected 2026-07-21: Lead-Form Conversion now counts real Zoho CRM leads by source '
+            "instead of a GA4 event proxy."
         ),
     )
     path = write_page(html, "website.html")
