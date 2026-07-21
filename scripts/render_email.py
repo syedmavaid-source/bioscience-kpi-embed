@@ -1,4 +1,5 @@
 import datetime
+import json
 import os
 import sys
 
@@ -69,6 +70,52 @@ def kpi_row(k):
     </tr>""", weight, achievement
 
 
+NARRATIVE_SYSTEM_PROMPT = """You write the "conclusion" card for a live marketing-analytics dashboard tile. \
+House style, matching prior editions exactly:
+- 2-3 sentences, one paragraph, no line breaks.
+- Lead with the single biggest problem or the single most important contrast in the numbers, using the actual figures (not vague words like "low" or "good" without a number attached).
+- Wrap the one most important phrase in <b>...</b> — exactly one bolded phrase, chosen for what a reader should not miss.
+- Use &mdash; (HTML entity, not a raw em dash character) for any dash.
+- Plain, direct, slightly analytical tone. No emoji, no exclamation points, no hedging ("it seems", "perhaps").
+- Do not restate the health score or status label — the card next to yours already shows those.
+- Output ONLY the paragraph HTML fragment. No preamble, no markdown, no quotes around it."""
+
+
+def generate_conclusion(month_label, kpi_rows, dist_open, dist_ctr, dist_ctor, health_disp, status_txt, fallback):
+    try:
+        import anthropic
+    except ImportError:
+        return fallback
+    try:
+        client = anthropic.Anthropic()
+        payload = {
+            "month": month_label,
+            "channel_health": health_disp,
+            "status": status_txt,
+            "scored_kpis": kpi_rows,
+            "distributor_context_unscored": {
+                "open_rate_pct": round(dist_open, 1),
+                "ctr_pct": round(dist_ctr, 1),
+                "ctor_pct": round(dist_ctor, 1),
+            },
+        }
+        response = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=300,
+            thinking={"type": "adaptive"},
+            output_config={"effort": "low"},
+            system=NARRATIVE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": json.dumps(payload, indent=2)}],
+        )
+        if response.stop_reason == "refusal":
+            return fallback
+        text = next((b.text for b in response.content if b.type == "text"), "").strip()
+        return text or fallback
+    except Exception as e:
+        print(f"LLM narrative generation failed, using fallback: {e}")
+        return fallback
+
+
 def context_row(label, value):
     return f"""    <tr class="excl">
       <td>{label}</td>
@@ -104,6 +151,7 @@ def main():
     weighted_sum = 0.0
     weight_total = 0
     calc_parts = []
+    narrative_kpis = []
     order = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %"]
     evals_by_kpi = {r["KPI"]: r for r in evals}
     ctr_actual = num(evals_by_kpi["CTR %"]["Actual Value"])
@@ -117,6 +165,14 @@ def main():
         weight_total += weight
         contribution = weight * achievement / 100
         calc_parts.append(f"{KPI_SHORT_NAME[kpi_name]} {weight} &times; {round(achievement):.0f}% = {contribution:.1f}")
+        narrative_kpis.append({
+            "name": KPI_SHORT_NAME[kpi_name],
+            "actual": round(num(k["Actual Value"]), 2),
+            "target": num(k["Target"]),
+            "benchmark": k["Benchmark"],
+            "achievement_pct": round(achievement, 1),
+            "weight": weight,
+        })
 
     rows_html.append(context_row("Open Rate (Distributors)", dist_open))
     rows_html.append(context_row("Click-Through Rate (Distributors)", dist_ctr))
@@ -128,11 +184,14 @@ def main():
     health_disp = f"{round(health):.0f} %" if health is not None else "Not scored"
 
     month_label = f"{MONTH_NAMES[latest_month]} {latest_year}"
-    conclusion = (
+    fallback_conclusion = (
         f"Deliverability is fine &mdash; hard bounces sit above the ceiling but aren't catastrophic &mdash; "
         f"while doctor <b>clicks have all but disappeared</b> (CTR {ctr_actual:.1f}% vs a {ctr_bench:.2f}% benchmark). "
         f"Distributors, on the identical infrastructure, click through at {dist_ctr:.1f}% and open-to-click at {dist_ctor:.1f}%: "
         f"the system works, the doctor content isn't landing."
+    )
+    conclusion = generate_conclusion(
+        month_label, narrative_kpis, dist_open, dist_ctr, dist_ctor, health_disp, status_txt, fallback_conclusion
     )
 
     generated_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
