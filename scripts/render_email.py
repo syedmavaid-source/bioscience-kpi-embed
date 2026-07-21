@@ -8,8 +8,8 @@ from render_common import (
     build_smart_conclusion, render_page, write_page, write_snapshot,
 )
 
-EVAL_VIEW_ID = "2605787000015515090"    # Email KPI Evaluation - Latest Month
-MONTHLY_VIEW_ID = "2605787000015519003"  # Email KPIs Monthly
+EVAL_VIEW_ID = "2605787000015552011"    # Email KPI Evaluation - Latest Month (Corrected)
+MONTHLY_VIEW_ID = "2605787000015551034"  # Email KPIs Monthly (Corrected)
 
 KPI_SHORT_NAME = {
     "CTR %": "Click-Through Rate",
@@ -31,12 +31,13 @@ def main():
     latest_year, latest_month = mkey(monthly[-1])
     latest_rows = [r for r in monthly if mkey(r) == (latest_year, latest_month)]
     dist = [r for r in latest_rows if r["Segment"] == "Distributor"]
-    opens = sum(num(r["Unique Opens"]) for r in dist)
+    total_opens = sum(num(r["Total Opens"]) for r in dist)
+    unique_opens = sum(num(r["Unique Opens"]) for r in dist)
     clicks = sum(num(r["Unique Clicks"]) for r in dist)
     sent = sum(num(r["Emails Sent"]) for r in dist)
-    dist_open = opens / sent * 100 if sent else 0
+    dist_open = total_opens / sent * 100 if sent else 0
     dist_ctr = clicks / sent * 100 if sent else 0
-    dist_ctor = clicks / opens * 100 if opens else 0
+    dist_ctor = clicks / unique_opens * 100 if unique_opens else 0
 
     rows_html = []
     weighted_sum = 0.0
@@ -99,12 +100,15 @@ def main():
         data_note=(
             "Doctor/General segment only is scored &mdash; this is the segment the channel is actually managed on. "
             "Distributor-segment rates are pulled live from the same MailerLite sync but carry no target, so they're "
-            "shown for contrast, not counted."
+            "shown for contrast, not counted. Open Rate uses total opens (incl. repeat opens), matching its own "
+            "benchmark's stated &quot;raw&quot; basis &mdash; CTR, CTOR and Bounce Rate use unique counts as before."
         ),
         foot_note=(
-            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; Latest Month" (dynamically resolves each '
-            'month\'s own latest data) joined against "KPI Targets". Achievement = min(current &divide; target, 1) '
-            "&times; 100, or min(target &divide; current, 1) &times; 100 where lower is better."
+            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; Latest Month (Corrected)" (dynamically '
+            'resolves each month\'s own latest data) joined against "KPI Targets". Corrected 2026-07-21: fixed Brand '
+            "mislabeling (a mistagged newsletter was hiding in \"Other\") and aligned Open Rate to raw opens to match "
+            "its own benchmark definition. Achievement = min(current &divide; target, 1) &times; 100, or "
+            "min(target &divide; current, 1) &times; 100 where lower is better."
         ),
     )
     path = write_page(html, "email.html")
