@@ -4,24 +4,28 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from zoho_client import access_token, export_view
 from render_common import (
-    MONTH_NAMES, num, status_for, kpi_row, brand_card,
-    build_smart_conclusion, render_page, write_page, write_snapshot,
+    MONTH_NAMES, num, brand_card, build_smart_conclusion, build_monthly_snapshots,
+    js_payload, render_sparkline, render_page, write_page, write_snapshot,
 )
 
-EVAL_VIEW_ID = "2605787000015513063"    # Social KPI Evaluation - Latest Month
-MONTHLY_VIEW_ID = "2605787000015512005"  # Social KPIs Monthly
+ALL_MONTHS_VIEW_ID = "2605787000015565042"  # Social KPI Evaluation - All Months v3
+MONTHLY_VIEW_ID = "2605787000015512005"     # Social KPIs Monthly (raw, for by-brand cards)
 
-KPI_SHORT_NAME = {
-    "Engagement Rate %": "Engagement Rate",
-    "Save Rate %": "Save Rate",
+KPI_SPECS = {
+    "Engagement Rate %": {"display_name": "Engagement Rate"},
+    "Save Rate %": {"display_name": "Save Rate"},
 }
 ORDER = ["Engagement Rate %", "Save Rate %"]
 
 
 def main():
     token = access_token()
-    evals = export_view(EVAL_VIEW_ID, token)
+    eval_rows = export_view(ALL_MONTHS_VIEW_ID, token)
     monthly = export_view(MONTHLY_VIEW_ID, token)
+
+    snapshots, months_desc = build_monthly_snapshots(eval_rows, KPI_SPECS, ORDER)
+    latest_key = months_desc[0]
+    latest = snapshots[latest_key]
 
     def mkey(r):
         return (int(r["Year"].replace(",", "")), int(r["Month"]))
@@ -29,7 +33,6 @@ def main():
     monthly.sort(key=mkey)
     latest_year, latest_month = mkey(monthly[-1])
     latest_rows = [r for r in monthly if mkey(r) == (latest_year, latest_month)]
-    month_label = f"{MONTH_NAMES[latest_month]} {latest_year}"
 
     brand_cards_html = ""
     if latest_rows:
@@ -41,78 +44,56 @@ def main():
             ]
             cards.append(brand_card(r["Brand"], lines))
         brand_cards_html = (
-            '  <div class="seclabel">By brand</div><div class="grid g3">\n'
+            '  <div class="seclabel">By brand (current month)</div><div class="grid g3">\n'
             + "\n".join(cards) + "\n  </div>\n\n"
         )
-
-    rows_html = []
-    weighted_sum = 0.0
-    weight_total = 0
-    calc_parts = []
-    narrative_kpis = []
-    evals_by_kpi = {r["KPI"]: r for r in evals}
-
-    for kpi_name in ORDER:
-        k = evals_by_kpi[kpi_name]
-        row_html, weight, achievement, bench_val = kpi_row(k, KPI_SHORT_NAME[kpi_name])
-        rows_html.append(row_html)
-        weighted_sum += weight * achievement
-        weight_total += weight
-        contribution = weight * achievement / 100
-        calc_parts.append(f"{KPI_SHORT_NAME[kpi_name]} {weight} &times; {round(achievement):.0f}% = {contribution:.1f}")
-        narrative_kpis.append({
-            "name": KPI_SHORT_NAME[kpi_name],
-            "actual": round(num(k["Actual Value"]), 2),
-            "target": num(k["Target"]),
-            "benchmark_value": bench_val,
-            "achievement_pct": round(achievement, 1),
-            "weight": weight,
-            "direction": k["Direction"],
-        })
-
-    health = weighted_sum / weight_total if weight_total >= 50 else None
-    status_txt, status_cls = status_for(health)
-    health_disp = f"{round(health):.0f} %" if health is not None else "Not scored"
 
     extra_sentence = (
         " Engagement is blended across Genefill and HYAcorp on a per-reach basis, since no BioScience Instagram is connected yet."
     )
-    conclusion = build_smart_conclusion(narrative_kpis, extra_sentence)
+    latest["conclusion"] = build_smart_conclusion(latest["narrative_kpis"], extra_sentence)
+
+    month_options = [(k, snapshots[k]["month_label"]) for k in months_desc]
+    trend_points = [(snapshots[k]["month_label"], snapshots[k]["health_value"]) for k in reversed(months_desc)]
+    trend_svg = render_sparkline(trend_points)
 
     html = render_page(
         title="Social Channel",
         channel_name="Social (Instagram)",
-        month_label=month_label,
-        health_disp=health_disp,
-        status_txt=status_txt,
-        status_cls=status_cls,
-        conclusion=conclusion,
+        month_label=latest["month_label"],
+        health_disp=latest["health_disp"],
+        status_txt=latest["status_txt"],
+        status_cls=latest["status_cls"],
+        conclusion=latest["conclusion"],
         kpi_table_header_cols=(
-            '<th style="width:22%">KPI</th><th style="width:13%">' + month_label + '</th>'
+            '<th style="width:22%">KPI</th><th style="width:13%">Actual</th>'
             '<th style="width:9%">Target</th><th style="width:20%">Benchmark</th>'
             '<th style="width:20%">Achievement</th><th style="width:7%">Weight</th><th>Status</th>'
         ),
-        rows_html=rows_html,
-        calc_parts=calc_parts,
-        weighted_sum=weighted_sum,
-        weight_total=weight_total,
+        rows_html=latest["rows_html"],
+        calc_inner_html=latest["calc_inner_html"],
+        month_options=month_options,
+        latest_key=latest_key,
+        monthly_data=js_payload(snapshots, latest_key),
+        trend_svg=trend_svg,
         brand_section_html=brand_cards_html,
         data_note=(
             "Engagement Rate = (Likes + Comments + Saves + Shares) &divide; Accounts Reached &times; 100 &mdash; a "
             "reach-based formula, not the follower-based one most public benchmarks use, so the benchmark figures "
-            "are directional context only."
+            "are directional context only. History starts July 2024 &mdash; earlier months had near-zero reach "
+            "(pre-current-brand tracking) and produced meaningless percentages, so they're excluded."
         ),
         foot_note=(
-            'Live from Zoho Analytics &mdash; "Social KPI Evaluation &ndash; Latest Month" joined against "KPI Targets".'
+            'Live from Zoho Analytics &mdash; "Social KPI Evaluation &ndash; All Months" joined against "KPI Targets".'
         ),
     )
     path = write_page(html, "social.html")
     write_snapshot("social", {
         "name": "Social (Instagram)", "page": "social.html",
-        "health_disp": health_disp, "status_txt": status_txt, "status_cls": status_cls,
-        "month_label": month_label,
+        "health_disp": latest["health_disp"], "status_txt": latest["status_txt"],
+        "status_cls": latest["status_cls"], "month_label": latest["month_label"],
     })
-    print(f"Wrote {path} — health {health_disp} ({status_txt}), month {month_label}")
+    print(f"Wrote {path} — health {latest['health_disp']} ({latest['status_txt']}), month {latest['month_label']}, {len(months_desc)} months of history")
 
 
 if __name__ == "__main__":

@@ -38,8 +38,8 @@ def kpi_row(k, display_name, month_precision=1, unit_suffix=" %", target_suffix=
     actual = num(k["Actual Value"])
     target = num(k["Target"])
     weight = int(num(k["Weight"]))
-    achievement = num(k["Target Achievement %"])
     direction = k["Direction"]
+    achievement = min(actual / target * 100, 100) if direction == "hi" else min(target / actual * 100, 100)
     bench_val = num(k["Benchmark Value"]) if k["Benchmark Value"] not in ("", None) else None
     bench_pct = None
     if bench_val is not None:
@@ -131,6 +131,135 @@ def build_smart_conclusion(kpis, extra_sentence=""):
     return f"{lead}{contrast}{extra_sentence}"
 
 
+def compute_health(kpis_for_health):
+    """kpis_for_health: list of {'weight', 'achievement_pct'}. Returns (health_or_None, status_txt,
+    status_cls, weighted_sum, weight_total)."""
+    weighted_sum = sum(k["weight"] * k["achievement_pct"] for k in kpis_for_health)
+    weight_total = sum(k["weight"] for k in kpis_for_health)
+    health = weighted_sum / weight_total if weight_total >= 50 else None
+    status_txt, status_cls = status_for(health)
+    return health, status_txt, status_cls, weighted_sum, weight_total
+
+
+def render_sparkline(months_asc, width=170, height=34):
+    """months_asc: [(label, health_value_or_None), ...] in chronological (oldest-first) order."""
+    pts = [(i, v) for i, (_, v) in enumerate(months_asc) if v is not None]
+    if len(pts) < 2:
+        return ""
+    vals = [v for _, v in pts]
+    lo, hi = min(vals), max(vals)
+    span = max(hi - lo, 1)
+    pad = 4
+    n = len(months_asc)
+    step = (width - 2 * pad) / max(n - 1, 1)
+    coords = []
+    for i, v in pts:
+        x = pad + i * step
+        y = height - pad - (v - lo) / span * (height - 2 * pad)
+        coords.append((x, y))
+    poly = " ".join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    last_x, last_y = coords[-1]
+    last_val = pts[-1][1]
+    dot_color = "var(--green)" if last_val >= 85 else "var(--amber)" if last_val >= 65 else "var(--red)"
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
+        f'style="display:block;margin-top:8px;" role="img" aria-label="Channel health trend">'
+        f'<polyline points="{poly}" fill="none" stroke="var(--blue)" stroke-width="1.5" '
+        f'stroke-linejoin="round" stroke-linecap="round"/>'
+        f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="3" fill="{dot_color}"/>'
+        f"</svg>"
+    )
+
+
+def build_monthly_snapshots(eval_rows, kpi_specs, order, constant_rows=None):
+    """Turn an "All Months" evaluation view's raw rows into a per-month dataset for the month
+    picker + trend. eval_rows: rows with KPI/Actual Value/Target/Weight/Direction/Benchmark/
+    Benchmark Value/Year/Month. kpi_specs: {kpi_key: {"display_name", "unit_suffix", "target_suffix",
+    "month_precision", "narrative_unit"}}. order: display order of kpi_keys. constant_rows: KPI rows
+    with no month dimension (e.g. an all-time cumulative metric) applied identically to every month.
+
+    Returns (snapshots: {"YYYY-MM": {...}}, months_desc: ["YYYY-MM", ...] latest first).
+    """
+    by_month = {}
+    for r in eval_rows:
+        y_raw, m_raw = r.get("Year"), r.get("Month")
+        if not y_raw or not m_raw:
+            continue
+        try:
+            y, m = int(str(y_raw).replace(",", "")), int(m_raw)
+        except ValueError:
+            continue
+        by_month.setdefault(f"{y:04d}-{m:02d}", {})[r["KPI"]] = r
+
+    if constant_rows:
+        for key in by_month:
+            for r in constant_rows:
+                by_month[key].setdefault(r["KPI"], r)
+
+    months_desc = sorted(by_month.keys(), reverse=True)
+    snapshots = {}
+    for key in months_desc:
+        _, m = key.split("-")
+        month_label = f"{MONTH_NAMES[int(m)]} {key[:4]}"
+        rows_html, calc_parts, narrative_kpis, kpis_for_health = [], [], [], []
+        for kpi_key in order:
+            r = by_month[key].get(kpi_key)
+            if r is None:
+                continue
+            spec = kpi_specs[kpi_key]
+            row_html, weight, achievement, bench_val = kpi_row(
+                r, spec["display_name"],
+                month_precision=spec.get("month_precision", 1),
+                unit_suffix=spec.get("unit_suffix", " %"),
+                target_suffix=spec.get("target_suffix"),
+            )
+            rows_html.append(row_html)
+            contribution = weight * achievement / 100
+            calc_parts.append(f"{spec['display_name']} {weight} &times; {round(achievement):.0f}% = {contribution:.1f}")
+            narrative_kpis.append({
+                "name": spec["display_name"],
+                "actual": round(num(r["Actual Value"]), 2),
+                "target": num(r["Target"]),
+                "benchmark_value": bench_val,
+                "achievement_pct": round(achievement, 1),
+                "weight": weight,
+                "direction": r["Direction"],
+                "unit": spec.get("narrative_unit", "%"),
+            })
+            kpis_for_health.append({"weight": weight, "achievement_pct": achievement})
+        if not narrative_kpis:
+            continue
+        health, status_txt, status_cls, weighted_sum, weight_total = compute_health(kpis_for_health)
+        health_disp = f"{round(health):.0f} %" if health is not None else "Not scored"
+        snapshots[key] = {
+            "month_label": month_label,
+            "rows_html": "\n".join(rows_html),
+            "calc_inner_html": (
+                f"{'&nbsp; | &nbsp;'.join(calc_parts)}<br>"
+                f'<span class="res">&rarr; {weighted_sum/100:.1f} &divide; {weight_total} = {health_disp}</span>'
+                f'<span class="cov">Weight coverage: <b style="color:inherit">{weight_total} of 100</b> '
+                f"measurable (scored only when &ge; 50).</span>"
+            ),
+            "health_disp": health_disp,
+            "status_txt": status_txt,
+            "status_cls": status_cls,
+            "status_color": {"g": "var(--green)", "a": "var(--amber)", "r": "var(--red)", "x": "var(--grey)"}[status_cls],
+            "conclusion": build_smart_conclusion(narrative_kpis),
+            "health_value": health,
+            "narrative_kpis": narrative_kpis,
+        }
+    return snapshots, months_desc
+
+
+def js_payload(snapshots, latest_key):
+    """Strip server-only fields (narrative_kpis, health_value) before embedding as page JSON."""
+    months = {
+        k: {kk: vv for kk, vv in v.items() if kk not in ("narrative_kpis", "health_value")}
+        for k, v in snapshots.items()
+    }
+    return {"months": months, "latest": latest_key}
+
+
 def build_overview_conclusion(channel_snapshots):
     """Deterministic cross-channel synthesis for the index page — same weighted-drag logic, applied
     to channel health scores instead of individual KPIs."""
@@ -216,14 +345,51 @@ tr.excl td:first-child{color:var(--mute);font-weight:600;}
 .foot{font-size:10.5px;color:var(--mute);margin-top:24px;border-top:1px solid var(--line);padding-top:10px;line-height:1.6;}
 .livechip{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--green);letter-spacing:.3px;text-transform:uppercase;}
 .livedot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px color-mix(in srgb, var(--green) 25%, transparent);}
+.monthpick{font-size:11px;font-weight:600;color:var(--navy);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:4px 8px;margin-left:8px;}
 </style>"""
 
 
 def render_page(*, title, channel_name, month_label, health_disp, status_txt, status_cls,
-                 conclusion, kpi_table_header_cols, rows_html, calc_parts, weighted_sum,
-                 weight_total, data_note, foot_note, brand_section_html="", legend_extra=""):
+                 conclusion, kpi_table_header_cols, rows_html, calc_inner_html,
+                 data_note, foot_note, brand_section_html="", legend_extra="",
+                 month_options=None, latest_key=None, monthly_data=None, trend_svg=""):
+    """rows_html/calc_inner_html are pre-built HTML strings (e.g. straight from a
+    build_monthly_snapshots() snapshot) so the initial render can never drift from the JS payload
+    used when switching months. month_options: [(key, label), ...] latest-first, for the picker
+    dropdown. monthly_data: {"months": {key: snapshot}, "latest": key}. Omit month_options/
+    monthly_data for a single-month page with no picker."""
     status_color = {"g": "var(--green)", "a": "var(--amber)", "r": "var(--red)", "x": "var(--grey)"}[status_cls]
     generated_at = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    picker_html = ""
+    script_html = ""
+    if month_options and monthly_data:
+        opts = "\n".join(
+            f'<option value="{k}"{" selected" if k == latest_key else ""}>{lbl}</option>'
+            for k, lbl in month_options
+        )
+        picker_html = f'<select class="monthpick" id="monthPicker" onchange="switchMonth(this.value)">\n{opts}\n</select>'
+        script_html = f"""
+<script>
+const MONTHLY = {json.dumps(monthly_data)};
+function switchMonth(key) {{
+  const d = MONTHLY.months[key];
+  if (!d) return;
+  document.getElementById('healthVal').textContent = d.health_disp;
+  const pill = document.getElementById('healthPill');
+  pill.textContent = d.status_txt;
+  pill.className = 'pill ' + d.status_cls;
+  document.getElementById('healthCard').style.borderLeftColor = d.status_color;
+  document.getElementById('conclusionText').innerHTML = d.conclusion;
+  document.getElementById('kpiRows').innerHTML = d.rows_html;
+  document.getElementById('calcInner').innerHTML = d.calc_inner_html;
+  document.getElementById('liveLabel').innerHTML =
+    (key === MONTHLY.latest
+      ? '<span class="livedot"></span>Live &mdash; ' + d.month_label + ' actuals'
+      : d.month_label + ' actuals (historical)');
+}}
+</script>"""
+
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>BioScience &middot; {title} &mdash; Live</title>
@@ -231,25 +397,28 @@ def render_page(*, title, channel_name, month_label, health_disp, status_txt, st
 
 <div class="wrap">
   <div class="crumb"><a href="index.html">Overview</a> &rsaquo; <b>{channel_name}</b></div>
-  <h2 class="sec">Level 2 &middot; {channel_name}<span class="sub">What exactly is off? &middot; <span class="livechip"><span class="livedot"></span>Live &mdash; {month_label} actuals</span></span></h2>
+  <h2 class="sec">Level 2 &middot; {channel_name}<span class="sub">What exactly is off? &middot; <span class="livechip" id="liveLabel"><span class="livedot"></span>Live &mdash; {month_label} actuals</span>{picker_html}</span></h2>
 
   <div class="grid g2" style="margin-top:12px;">
-    <div class="card" style="border-left:5px solid {status_color};">
+    <div class="card" style="border-left:5px solid {status_color};" id="healthCard">
       <div class="lab">Channel health</div>
-      <div class="val">{health_disp}</div>
-      <span class="pill {status_cls}">{status_txt}</span>
+      <div class="val" id="healthVal">{health_disp}</div>
+      <span class="pill {status_cls}" id="healthPill">{status_txt}</span>
+      {trend_svg}
     </div>
     <div class="card">
       <div class="lab">The conclusion</div>
-      <div class="con" style="margin-top:6px;">{conclusion}</div>
+      <div class="con" style="margin-top:6px;" id="conclusionText">{conclusion}</div>
     </div>
   </div>
 
 {brand_section_html}
-  <div class="seclabel">The KPIs &mdash; {month_label} vs. target vs. verified benchmark</div>
+  <div class="seclabel">The KPIs &mdash; vs. target vs. verified benchmark</div>
   <div class="tw"><table>
-    <tr>{kpi_table_header_cols}</tr>
-{chr(10).join(rows_html)}
+    <thead><tr>{kpi_table_header_cols}</tr></thead>
+    <tbody id="kpiRows">
+{rows_html}
+    </tbody>
   </table></div>
   <div class="legend">
     <span>&#9612; bar = achievement of target (capped 100%)</span>
@@ -258,17 +427,18 @@ def render_page(*, title, channel_name, month_label, health_disp, status_txt, st
   </div>
 
   <div class="seclabel">The score, opened up &mdash; no black box</div>
-  <div class="calc">
+  <div class="calc" id="calcBox">
     <b>Channel Health = &Sigma;(weight &times; achievement) &divide; &Sigma;(weight)</b><br>
-    {'&nbsp; | &nbsp;'.join(calc_parts)}<br>
-    <span class="res">&rarr; {weighted_sum/100:.1f} &divide; {weight_total} = {health_disp}</span>
-    <span class="cov">Weight coverage: <b style="color:inherit">{weight_total} of 100</b> measurable (scored only when &ge; 50).</span>
+    <span id="calcInner">
+    {calc_inner_html}
+    </span>
   </div>
 
   <div class="warnbox"><b>Data note.</b> {data_note}</div>
 
   <div class="foot">{foot_note} Regenerated {generated_at}.</div>
 </div>
+{script_html}
 </body></html>
 """
 

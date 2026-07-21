@@ -4,25 +4,30 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 from zoho_client import access_token, export_view
 from render_common import (
-    MONTH_NAMES, num, status_for, kpi_row, context_row,
-    build_smart_conclusion, render_page, write_page, write_snapshot,
+    num, context_row, build_smart_conclusion, build_monthly_snapshots,
+    js_payload, render_sparkline, render_page, write_page, write_snapshot,
 )
 
-EVAL_VIEW_ID = "2605787000015552011"    # Email KPI Evaluation - Latest Month (Corrected)
-MONTHLY_VIEW_ID = "2605787000015551034"  # Email KPIs Monthly (Corrected)
+ALL_MONTHS_VIEW_ID = "2605787000015559016"    # Email KPI Evaluation - All Months
+MONTHLY_VIEW_ID = "2605787000015551034"       # Email KPIs Monthly (Corrected)
 
-KPI_SHORT_NAME = {
-    "CTR %": "Click-Through Rate",
-    "CTOR %": "Click-to-Open Rate",
-    "Open Rate %": "Open Rate",
-    "Bounce Rate %": "Hard Bounce Rate",
+KPI_SPECS = {
+    "CTR %": {"display_name": "Click-Through Rate"},
+    "CTOR %": {"display_name": "Click-to-Open Rate"},
+    "Open Rate %": {"display_name": "Open Rate"},
+    "Bounce Rate %": {"display_name": "Hard Bounce Rate"},
 }
+ORDER = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %"]
 
 
 def main():
     token = access_token()
-    evals = export_view(EVAL_VIEW_ID, token)
+    eval_rows = export_view(ALL_MONTHS_VIEW_ID, token)
     monthly = export_view(MONTHLY_VIEW_ID, token)
+
+    snapshots, months_desc = build_monthly_snapshots(eval_rows, KPI_SPECS, ORDER)
+    latest_key = months_desc[0]
+    latest = snapshots[latest_key]
 
     def mkey(r):
         return (int(r["Year"].replace(",", "")), int(r["Month"]))
@@ -39,85 +44,63 @@ def main():
     dist_ctr = clicks / sent * 100 if sent else 0
     dist_ctor = clicks / unique_opens * 100 if unique_opens else 0
 
-    rows_html = []
-    weighted_sum = 0.0
-    weight_total = 0
-    calc_parts = []
-    narrative_kpis = []
-    order = ["CTR %", "CTOR %", "Open Rate %", "Bounce Rate %"]
-    evals_by_kpi = {r["KPI"]: r for r in evals}
-
-    for kpi_name in order:
-        k = evals_by_kpi[kpi_name]
-        row_html, weight, achievement, bench_val = kpi_row(k, KPI_SHORT_NAME[kpi_name])
-        rows_html.append(row_html)
-        weighted_sum += weight * achievement
-        weight_total += weight
-        contribution = weight * achievement / 100
-        calc_parts.append(f"{KPI_SHORT_NAME[kpi_name]} {weight} &times; {round(achievement):.0f}% = {contribution:.1f}")
-        narrative_kpis.append({
-            "name": KPI_SHORT_NAME[kpi_name],
-            "actual": round(num(k["Actual Value"]), 2),
-            "target": num(k["Target"]),
-            "benchmark_value": bench_val,
-            "achievement_pct": round(achievement, 1),
-            "weight": weight,
-            "direction": k["Direction"],
-        })
-
-    rows_html.append(context_row("Open Rate (Distributors)", dist_open))
-    rows_html.append(context_row("Click-Through Rate (Distributors)", dist_ctr))
-    rows_html.append(context_row("Click-to-Open Rate (Distributors)", dist_ctor))
-
-    health = weighted_sum / weight_total if weight_total >= 50 else None
-    status_txt, status_cls = status_for(health)
-    health_disp = f"{round(health):.0f} %" if health is not None else "Not scored"
-    month_label = f"{MONTH_NAMES[latest_month]} {latest_year}"
-
+    # augment the latest month with distributor context rows + a richer conclusion
+    context_rows = "\n".join([
+        context_row("Open Rate (Distributors)", dist_open),
+        context_row("Click-Through Rate (Distributors)", dist_ctr),
+        context_row("Click-to-Open Rate (Distributors)", dist_ctor),
+    ])
+    latest["rows_html"] = latest["rows_html"] + "\n" + context_rows
     extra_sentence = (
         f" Distributors, on the identical infrastructure, click through at {dist_ctr:.1f}% "
         f"and open-to-click at {dist_ctor:.1f}%: the system works, the doctor content is what's underperforming."
     )
-    conclusion = build_smart_conclusion(narrative_kpis, extra_sentence)
+    latest["conclusion"] = build_smart_conclusion(latest["narrative_kpis"], extra_sentence)
+
+    month_options = [(k, snapshots[k]["month_label"]) for k in months_desc]
+    trend_points = [(snapshots[k]["month_label"], snapshots[k]["health_value"]) for k in reversed(months_desc)]
+    trend_svg = render_sparkline(trend_points)
 
     html = render_page(
         title="Email Channel",
         channel_name="Email Marketing",
-        month_label=month_label,
-        health_disp=health_disp,
-        status_txt=status_txt,
-        status_cls=status_cls,
-        conclusion=conclusion,
+        month_label=latest["month_label"],
+        health_disp=latest["health_disp"],
+        status_txt=latest["status_txt"],
+        status_cls=latest["status_cls"],
+        conclusion=latest["conclusion"],
         kpi_table_header_cols=(
-            '<th style="width:22%">KPI</th><th style="width:13%">' + month_label + '</th>'
+            '<th style="width:22%">KPI</th><th style="width:13%">Actual</th>'
             '<th style="width:9%">Target</th><th style="width:20%">Benchmark</th>'
             '<th style="width:20%">Achievement</th><th style="width:7%">Weight</th><th>Status</th>'
         ),
-        rows_html=rows_html,
-        calc_parts=calc_parts,
-        weighted_sum=weighted_sum,
-        weight_total=weight_total,
+        rows_html=latest["rows_html"],
+        calc_inner_html=latest["calc_inner_html"],
+        month_options=month_options,
+        latest_key=latest_key,
+        monthly_data=js_payload(snapshots, latest_key),
+        trend_svg=trend_svg,
         data_note=(
             "Doctor/General segment only is scored &mdash; this is the segment the channel is actually managed on. "
             "Distributor-segment rates are pulled live from the same MailerLite sync but carry no target, so they're "
-            "shown for contrast, not counted. Open Rate uses total opens (incl. repeat opens), matching its own "
-            "benchmark's stated &quot;raw&quot; basis &mdash; CTR, CTOR and Bounce Rate use unique counts as before."
+            "shown for contrast (current month only, not shown for past months) and not counted. Open Rate uses "
+            "total opens (incl. repeat opens), matching its own benchmark's stated &quot;raw&quot; basis &mdash; "
+            "CTR, CTOR and Bounce Rate use unique counts as before."
         ),
         foot_note=(
-            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; Latest Month (Corrected)" (dynamically '
-            'resolves each month\'s own latest data) joined against "KPI Targets". Corrected 2026-07-21: fixed Brand '
-            "mislabeling (a mistagged newsletter was hiding in \"Other\") and aligned Open Rate to raw opens to match "
-            "its own benchmark definition. Achievement = min(current &divide; target, 1) &times; 100, or "
+            'Live from Zoho Analytics &mdash; "Email KPI Evaluation &ndash; All Months" (Corrected) joined against '
+            '"KPI Targets". Corrected 2026-07-21: fixed Brand mislabeling and aligned Open Rate to raw opens to '
+            "match its own benchmark definition. Achievement = min(current &divide; target, 1) &times; 100, or "
             "min(target &divide; current, 1) &times; 100 where lower is better."
         ),
     )
     path = write_page(html, "email.html")
     write_snapshot("email", {
         "name": "Email Marketing", "page": "email.html",
-        "health_disp": health_disp, "status_txt": status_txt, "status_cls": status_cls,
-        "month_label": month_label,
+        "health_disp": latest["health_disp"], "status_txt": latest["status_txt"],
+        "status_cls": latest["status_cls"], "month_label": latest["month_label"],
     })
-    print(f"Wrote {path} — health {health_disp} ({status_txt}), month {month_label}")
+    print(f"Wrote {path} — health {latest['health_disp']} ({latest['status_txt']}), month {latest['month_label']}, {len(months_desc)} months of history")
 
 
 if __name__ == "__main__":
