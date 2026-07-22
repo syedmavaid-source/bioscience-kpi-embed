@@ -51,21 +51,22 @@ def main():
 <title>BioScience &middot; Digital KPI Dashboard &mdash; Live</title>
 {STYLE_BLOCK}
 <style>
-.tilegrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;}}
-.tile{{background:var(--card);border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,54,61,.09);
-  border-left:4px solid var(--grey);text-decoration:none;display:block;transition:transform .1s,box-shadow .1s;}}
-.tile:hover{{transform:translateY(-2px);box-shadow:0 5px 14px rgba(0,54,61,.16);}}
-.tile .name{{font-size:13px;font-weight:700;color:var(--navy);}}
-.tile .score{{font-size:28px;font-weight:900;color:var(--navy);margin:4px 0;font-variant-numeric:tabular-nums;}}
-.tile .drill{{font-size:10px;color:var(--blue);font-weight:700;margin-top:8px;}}
+.tilegrid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;}}
+.tile{{background:var(--card);border-radius:10px;padding:20px 22px;box-shadow:0 2px 10px rgba(0,39,44,.07);
+  border:1px solid var(--line);border-left:5px solid var(--grey);text-decoration:none;display:block;
+  transition:transform .12s,box-shadow .12s;}}
+.tile:hover{{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,39,44,.15);}}
+.tile .name{{font-size:13.5px;font-weight:700;color:var(--navy);letter-spacing:.2px;}}
+.tile .score{{font-size:38px;font-weight:900;color:var(--navy);margin:8px 0 10px;font-variant-numeric:tabular-nums;letter-spacing:-1px;}}
+.tile .drill{{font-size:11px;color:var(--blue);font-weight:700;margin-top:12px;letter-spacing:.3px;}}
 </style>
 </head><body>
 
 <div class="wrap">
   {LOGO_HTML}
-  <h2 class="sec">Digital KPI Dashboard<span class="sub">{month_label} &mdash; <span class="livechip"><span class="livedot"></span>Live, refreshed every 20 min</span></span></h2>
+  <h2 class="sec" style="margin-top:26px;">Digital KPI Dashboard<span class="sub">{month_label} &mdash; <span class="livechip"><span class="livedot"></span>Live, refreshed every 20 min</span></span></h2>
 
-  <div class="grid g2" style="margin-top:16px;">
+  <div class="grid g2" style="margin-top:22px;">
     <div class="card" style="background:var(--calc-bg);color:var(--calc-fg);border-left:5px solid {overall_color};">
       <div class="lab" style="color:var(--calc-accent);">Overall digital health</div>
       <div class="val" style="color:var(--calc-fg);">{overall_disp}</div>
@@ -73,7 +74,7 @@ def main():
     </div>
     <div class="card">
       <div class="lab">The conclusion</div>
-      <div class="con" style="margin-top:6px;">{overview_conclusion}</div>
+      <div class="con" style="margin-top:10px;">{overview_conclusion}</div>
     </div>
   </div>
 

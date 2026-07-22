@@ -141,7 +141,7 @@ def compute_health(kpis_for_health):
     return health, status_txt, status_cls, weighted_sum, weight_total
 
 
-def render_sparkline(months_asc, width=170, height=34):
+def render_sparkline(months_asc, width=240, height=52):
     """months_asc: [(label, health_value_or_None), ...] in chronological (oldest-first) order."""
     pts = [(i, v) for i, (_, v) in enumerate(months_asc) if v is not None]
     if len(pts) < 2:
@@ -149,7 +149,7 @@ def render_sparkline(months_asc, width=170, height=34):
     vals = [v for _, v in pts]
     lo, hi = min(vals), max(vals)
     span = max(hi - lo, 1)
-    pad = 4
+    pad = 5
     n = len(months_asc)
     step = (width - 2 * pad) / max(n - 1, 1)
     coords = []
@@ -163,10 +163,10 @@ def render_sparkline(months_asc, width=170, height=34):
     dot_color = "var(--green)" if last_val >= 85 else "var(--amber)" if last_val >= 65 else "var(--red)"
     return (
         f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" '
-        f'style="display:block;margin-top:8px;" role="img" aria-label="Channel health trend">'
-        f'<polyline points="{poly}" fill="none" stroke="var(--blue)" stroke-width="1.5" '
+        f'style="display:block;margin-top:14px;" role="img" aria-label="Channel health trend">'
+        f'<polyline points="{poly}" fill="none" stroke="var(--blue)" stroke-width="2.25" '
         f'stroke-linejoin="round" stroke-linecap="round"/>'
-        f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="3" fill="{dot_color}"/>'
+        f'<circle cx="{last_x:.1f}" cy="{last_y:.1f}" r="4" fill="{dot_color}"/>'
         f"</svg>"
     )
 
@@ -292,76 +292,99 @@ STYLE_BLOCK = """<style>
   /* BioScience brand book (Oct '17), sec. 2.3.2: primary white/dark-green/turquoise,
      secondary black/wine/blue/deep-teal/grays. --blue and --navy are legacy variable
      names kept for compatibility with helper functions; values now map to brand hex. */
-  --blue:#00B0B9; --navy:#004851; --deep:#00363d; --teal:#007275; --gold:#A71757;
-  --ink:#293c40; --mute:#6c7f83; --green:#2f9e5f; --amber:#E08A1E; --red:#c94a3b;
-  --grey:#9ea8b0; --line:#dde3e4; --card:#ffffff; --bg:#f1f6f6;
-  --calc-bg:#00363d; --calc-fg:#f2f8f8; --calc-accent:#7fd8dc; --calc-res:#ffffff;
+  --blue:#00A9AF; --navy:#00363d; --deep:#00363d; --teal:#007275; --gold:#A71757;
+  --ink:#1c2b2e; --mute:#647679; --green:#2f9e5f; --amber:#d9840f; --red:#c0392b;
+  --grey:#9ea8b0; --line:#e4e9e9; --card:#ffffff; --bg:#f4f8f7;
+  --calc-bg:#00272c; --calc-fg:#f2f8f8; --calc-accent:#5fd9df; --calc-res:#ffffff;
+  --mh-bg:#00272c; --mh-fg:#f4fbfb; --mh-accent:#2be3e8;
 }
 :root[data-theme="dark"]{
-  --ink:#e7edf0; --mute:#93a8ac; --card:#132326; --bg:#0a1718; --line:#22383b;
-  --navy:#4fc0c7; --navy-fg:#eaf6fb; --blue:#4fc0c7; --gold:#e0679a;
-  --calc-bg:#06181a; --calc-fg:#dfe9ee; --calc-accent:#7fd8dc; --calc-res:#ffffff;
+  --ink:#e9f1f1; --mute:#8fa5a8; --card:#132b2c; --bg:#071615; --line:#1e3536;
+  --navy:#4fd0d5; --navy-fg:#eaf6fb; --blue:#4fd0d5; --gold:#ea7aa8;
+  --calc-bg:#01191b; --calc-fg:#e3f2f2; --calc-accent:#5fd9df; --calc-res:#ffffff;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --ink:#e7edf0; --mute:#93a8ac; --card:#132326; --bg:#0a1718; --line:#22383b;
-    --navy:#4fc0c7; --navy-fg:#eaf6fb; --blue:#4fc0c7; --gold:#e0679a;
-    --calc-bg:#06181a; --calc-fg:#dfe9ee; --calc-accent:#7fd8dc; --calc-res:#ffffff;
+    --ink:#e9f1f1; --mute:#8fa5a8; --card:#132b2c; --bg:#071615; --line:#1e3536;
+    --navy:#4fd0d5; --navy-fg:#eaf6fb; --blue:#4fd0d5; --gold:#ea7aa8;
+    --calc-bg:#01191b; --calc-fg:#e3f2f2; --calc-accent:#5fd9df; --calc-res:#ffffff;
   }
 }
 *{box-sizing:border-box;margin:0;padding:0;font-family:Arial,'Helvetica Neue',sans-serif;}
-body{background:var(--bg);color:var(--ink);}
-.wrap{max-width:1120px;margin:0 auto;padding:22px 20px 40px;}
-.brandbar{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--line);}
-.logo{font-weight:900;font-size:19px;letter-spacing:-.3px;display:inline-flex;align-items:center;gap:9px;text-decoration:none;}
-.logo-bio{color:var(--blue);}
-.logo-div{width:3px;height:17px;background:var(--navy);display:inline-block;}
-.logo-sci{color:var(--navy);}
-.logo-tag{font-size:10px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:1.4px;}
-.crumb{font-size:12px;color:var(--mute);margin-bottom:2px;}
+body{background:var(--bg);color:var(--ink);font-size:15px;}
+.wrap{max-width:1180px;margin:0 auto;padding:0 26px 56px;}
+
+/* Masthead: fixed brand-dark-green band, constant across light/dark theme on purpose
+   -- it's the brand mark, not a content surface that should adapt to reader preference. */
+.masthead{background:var(--mh-bg);color:var(--mh-fg);margin:0 calc(-50vw + 50%);padding:20px calc(50vw - 50% + 26px);
+  display:flex;align-items:center;justify-content:space-between;gap:16px;position:relative;overflow:hidden;}
+.masthead .pattern{position:absolute;right:0;top:0;bottom:0;width:180px;display:flex;align-items:center;
+  justify-content:flex-end;gap:5px;opacity:.4;pointer-events:none;}
+.masthead .pattern span{width:3px;border-radius:1.5px;background:var(--mh-accent);display:inline-block;}
+.logo{font-weight:900;font-size:26px;letter-spacing:-.5px;display:inline-flex;align-items:center;gap:11px;
+  text-decoration:none;color:var(--mh-fg);position:relative;z-index:1;}
+.logo-bio{color:var(--mh-accent);}
+.logo-div{width:4px;height:23px;background:var(--mh-accent);display:inline-block;border-radius:1px;}
+.logo-sci{color:var(--mh-fg);}
+.logo-tag{font-size:11.5px;color:color-mix(in srgb, var(--mh-fg) 62%, transparent);font-weight:700;
+  text-transform:uppercase;letter-spacing:1.8px;position:relative;z-index:1;}
+
+.crumb{font-size:13px;color:var(--mute);margin:22px 0 4px;}
 .crumb b{color:var(--navy);font-weight:700;}
-.crumb a{color:var(--blue);text-decoration:none;font-weight:600;}
-h2.sec{font-size:20px;color:var(--navy);font-weight:900;margin:6px 0 2px;}
-h2.sec .sub{font-size:12.5px;color:var(--mute);font-weight:500;display:block;margin-top:3px;}
-.seclabel{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold);font-weight:700;margin:20px 0 8px;}
-.grid{display:grid;gap:12px;}
+.crumb a{color:var(--blue);text-decoration:none;font-weight:700;}
+h2.sec{font-size:34px;color:var(--navy);font-weight:900;margin:2px 0 4px;letter-spacing:-.5px;}
+h2.sec .sub{font-size:14px;color:var(--mute);font-weight:500;display:block;margin-top:8px;letter-spacing:0;}
+.seclabel{font-size:12.5px;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold);font-weight:700;
+  margin:34px 0 12px;display:flex;align-items:center;gap:9px;}
+.seclabel::before{content:"";width:16px;height:4px;border-radius:2px;background:var(--gold);display:inline-block;flex:none;}
+.grid{display:grid;gap:16px;}
 .g2{grid-template-columns:2fr 3fr;}
 .g3{grid-template-columns:repeat(3,1fr);}
-.card{background:var(--card);border-radius:8px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,54,61,.09);}
-.card .lab{font-size:11px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
-.card .val{font-size:28px;font-weight:900;color:var(--navy);margin:4px 0 2px;font-variant-numeric:tabular-nums;}
-.card .con{font-size:12px;color:var(--ink);line-height:1.5;}
-.pill{display:inline-block;font-size:9.5px;font-weight:700;border-radius:3px;padding:2px 10px;color:#fff;letter-spacing:.3px;}
+.card{background:var(--card);border-radius:10px;padding:24px 26px;box-shadow:0 2px 10px rgba(0,39,44,.07);
+  border:1px solid var(--line);}
+.card .lab{font-size:12px;color:var(--mute);font-weight:700;text-transform:uppercase;letter-spacing:1px;}
+.card .val{font-size:64px;font-weight:900;color:var(--navy);margin:8px 0 6px;line-height:1;
+  font-variant-numeric:tabular-nums;letter-spacing:-1.5px;}
+.card .con{font-size:15.5px;color:var(--ink);line-height:1.62;}
+.pill{display:inline-block;font-size:11px;font-weight:700;border-radius:4px;padding:4px 13px;color:#fff;letter-spacing:.4px;}
 .g{background:var(--green);} .a{background:var(--amber);} .r{background:var(--red);} .x{background:var(--grey);}
 .tw{overflow-x:auto;}
-table{width:100%;border-collapse:separate;border-spacing:0 7px;min-width:720px;}
-th{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mute);text-align:left;padding:0 12px;font-weight:700;}
-td{background:var(--card);padding:11px 12px;font-size:12.5px;vertical-align:middle;}
-tr td:first-child{border-radius:6px 0 0 6px;font-weight:700;color:var(--navy);}
-tr td:last-child{border-radius:0 6px 6px 0;}
+table{width:100%;border-collapse:separate;border-spacing:0 10px;min-width:760px;}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute);text-align:left;padding:0 14px;font-weight:700;}
+td{background:var(--card);padding:15px 14px;font-size:14.5px;vertical-align:middle;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+td:nth-child(5){white-space:nowrap;}
+tr td:first-child{border-radius:8px 0 0 8px;font-weight:700;color:var(--navy);border-left:1px solid var(--line);}
+tr td:last-child{border-radius:0 8px 8px 0;border-right:1px solid var(--line);}
 tr.excl td{background:color-mix(in srgb, var(--card) 88%, var(--mute));color:var(--mute);}
 tr.excl td:first-child{color:var(--mute);font-weight:600;}
-.bar{height:8px;background:var(--line);border-radius:2px;position:relative;width:150px;display:inline-block;vertical-align:middle;}
-.bar i{position:absolute;left:0;top:0;height:8px;border-radius:2px;}
-.bnk{position:absolute;top:-3px;width:2px;height:14px;background:var(--navy);}
-.small{font-size:10px;color:var(--mute);}
-.legend{display:flex;gap:20px;flex-wrap:wrap;font-size:10.5px;color:var(--mute);align-items:center;margin:11px 0 0;}
-.calc{margin-top:14px;background:var(--calc-bg);color:var(--calc-fg);border-radius:8px;padding:14px 16px;font-size:11.5px;font-family:'SF Mono','Courier New',monospace;line-height:1.8;}
+.bar{height:11px;background:var(--line);border-radius:2px;position:relative;width:160px;display:inline-block;vertical-align:middle;}
+.bar i{position:absolute;left:0;top:0;height:11px;border-radius:2px;}
+.bnk{position:absolute;top:-3px;width:2px;height:17px;background:var(--navy);}
+.small{font-size:11px;color:var(--mute);}
+.legend{display:flex;gap:22px;flex-wrap:wrap;font-size:11.5px;color:var(--mute);align-items:center;margin:14px 0 0;}
+.calc{margin-top:16px;background:var(--calc-bg);color:var(--calc-fg);border-radius:10px;padding:22px 26px;font-size:13.5px;font-family:'SF Mono','Courier New',monospace;line-height:2;}
 .calc b{color:var(--calc-accent);}
-.calc .res{color:var(--calc-res);font-weight:700;}
-.calc .cov{color:var(--calc-accent);opacity:.85;font-size:10.5px;display:block;margin-top:6px;}
-.warnbox{margin-top:14px;background:color-mix(in srgb, var(--gold) 10%, var(--card));border-left:3px solid var(--gold);border-radius:0 6px 6px 0;padding:12px 15px;font-size:12px;line-height:1.55;}
-.foot{font-size:10.5px;color:var(--mute);margin-top:24px;border-top:1px solid var(--line);padding-top:10px;line-height:1.6;}
-.livechip{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:700;color:var(--blue);letter-spacing:.3px;text-transform:uppercase;}
-.livedot{width:6px;height:6px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 2px color-mix(in srgb, var(--blue) 25%, transparent);}
-.monthpick{font-size:11px;font-weight:600;color:var(--navy);background:var(--card);border:1px solid var(--line);border-radius:4px;padding:4px 8px;margin-left:8px;}
+.calc .res{color:var(--calc-res);font-weight:700;font-size:15px;}
+.calc .cov{color:var(--calc-accent);opacity:.85;font-size:11.5px;display:block;margin-top:8px;}
+.warnbox{margin-top:16px;background:color-mix(in srgb, var(--gold) 9%, var(--card));border-left:3px solid var(--gold);border-radius:0 8px 8px 0;padding:16px 20px;font-size:13.5px;line-height:1.6;}
+.foot{font-size:12px;color:var(--mute);margin-top:30px;border-top:1px solid var(--line);padding-top:14px;line-height:1.65;}
+.livechip{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:var(--blue);letter-spacing:.4px;text-transform:uppercase;}
+.livedot{width:7px;height:7px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px color-mix(in srgb, var(--blue) 22%, transparent);}
+.monthpick{font-size:12.5px;font-weight:700;color:var(--navy);background:var(--card);border:1px solid var(--line);border-radius:5px;padding:6px 10px;margin-left:10px;}
 </style>"""
 
+
+def _masthead_pattern():
+    heights = [10, 18, 8, 22, 12, 16, 9]
+    return "".join(f'<span style="height:{h}px"></span>' for h in heights)
+
+
 LOGO_HTML = (
-    '<div class="brandbar"><a href="index.html" class="logo">'
-    '<span class="logo-bio">Bio</span><span class="logo-div"></span>'
-    '<span class="logo-sci">SCIENCE</span></a>'
-    '<span class="logo-tag">Digital KPI Dashboard</span></div>'
+    f'<div class="masthead"><a href="index.html" class="logo">'
+    f'<span class="logo-bio">Bio</span><span class="logo-div"></span>'
+    f'<span class="logo-sci">SCIENCE</span></a>'
+    f'<span class="logo-tag">Digital KPI Dashboard</span>'
+    f'<span class="pattern">{_masthead_pattern()}</span></div>'
 )
 
 
@@ -416,7 +439,7 @@ function switchMonth(key) {{
   <div class="crumb"><a href="index.html">Overview</a> &rsaquo; <b>{channel_name}</b></div>
   <h2 class="sec">Level 2 &middot; {channel_name}<span class="sub">What exactly is off? &middot; <span class="livechip" id="liveLabel"><span class="livedot"></span>Live &mdash; {month_label} actuals</span>{picker_html}</span></h2>
 
-  <div class="grid g2" style="margin-top:12px;">
+  <div class="grid g2" style="margin-top:20px;">
     <div class="card" style="border-left:5px solid {status_color};" id="healthCard">
       <div class="lab">Channel health</div>
       <div class="val" id="healthVal">{health_disp}</div>
@@ -425,7 +448,7 @@ function switchMonth(key) {{
     </div>
     <div class="card">
       <div class="lab">The conclusion</div>
-      <div class="con" style="margin-top:6px;" id="conclusionText">{conclusion}</div>
+      <div class="con" style="margin-top:10px;" id="conclusionText">{conclusion}</div>
     </div>
   </div>
 
